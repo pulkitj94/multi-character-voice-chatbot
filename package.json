@@ -1,0 +1,20 @@
+{
+  "name": "joey-voice-chatbot",
+  "version": "1.0.0",
+  "description": "A voice chatbot that talks like Joey from FRIENDS",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "keywords": ["voice", "chatbot", "joey", "friends"],
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "axios": "^1.6.0",
+    "cors": "^2.8.5",
+    "dotenv": "^16.0.0",
+    "express": "^4.18.0",
+    "form-data": "^4.0.0",
+    "socket.io": "^4.5.0"
+  }
+}
