@@ -3,90 +3,73 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Joey Voice Chatbot</title>
+    <title>Multi-Character Voice Chatbot</title>
     <link rel="stylesheet" href="styles.css">
 </head>
 <body>
     <div class="container">
         <!-- HEADER -->
         <header>
-            <h1>🎬 Joey Voice Chatbot</h1>
-            <p>Talk to Joey Tribbiani - How you doin'?</p>
+            <h1>🎬 Multi-Character Voice Chatbot</h1>
+            <p>Talk to Joey, Dwight, or Dhruv</p>
         </header>
 
-        <!-- CHARACTER DISPLAY -->
-        <div class="character-section">
-            <div class="character-card">
-                <h2>Joey Tribbiani</h2>
-                <p class="character-subtitle">From F.R.I.E.N.D.S</p>
-                <p class="character-desc">"Could I BE any more charming?"</p>
+        <!-- CHARACTER SELECTION BUTTONS -->
+        <div class="character-selection">
+            <div class="character-buttons">
+                <button class="character-btn active" data-character="joey" onclick="selectCharacter('joey')">
+                    🎬 Joey<br><small>F.R.I.E.N.D.S</small>
+                </button>
+                <button class="character-btn" data-character="dwight" onclick="selectCharacter('dwight')">
+                    🏢 Dwight<br><small>The Office</small>
+                </button>
+                <button class="character-btn" data-character="dhruv" onclick="selectCharacter('dhruv')">
+                    📺 Dhruv<br><small>YouTuber</small>
+                </button>
             </div>
         </div>
 
-        <!-- CHAT AREA WITH HISTORY -->
+        <!-- CHARACTER DISPLAY - Compact -->
+        <div class="character-section">
+            <div class="character-card">
+                <h3 id="characterName">Joey Tribbiani</h3>
+                <p class="character-subtitle" id="characterSource">From F.R.I.E.N.D.S</p>
+            </div>
+        </div>
+
+        <!-- MAIN CHAT AREA - Takes up most space -->
         <div class="chat-container">
-            <!-- CHAT HISTORY PANEL -->
-            <div id="chatHistory" class="chat-history">
-                <p class="history-placeholder">Chat history will appear here...</p>
+            <!-- STATUS MESSAGE (temporary) -->
+            <div id="statusBox" class="status-box hidden">
+                <p id="statusText">Processing...</p>
             </div>
 
-            <!-- CURRENT INTERACTION AREA -->
-            <div class="current-interaction">
-                <!-- STATUS INDICATOR -->
-                <div id="statusBox" class="status-box hidden">
-                    <p id="statusText" class="status-text">Processing...</p>
-                </div>
-
-                <!-- USER MESSAGE (for temporary display) -->
-                <div id="userMessageBox" class="message-box hidden">
-                    <p class="label">You said:</p>
-                    <p id="userMessage" class="text"></p>
-                </div>
-
-                <!-- JOEY'S CURRENT RESPONSE -->
-                <div id="joeyMessageBox" class="message-box hidden">
-                    <p class="label">Joey says:</p>
-                    <p id="joeyMessage" class="text"></p>
-                </div>
+            <!-- CHAT HISTORY - All messages with play buttons -->
+            <div id="chatHistory" class="chat-history">
+                <p class="history-placeholder">Start speaking to see the conversation here...</p>
             </div>
         </div>
 
         <!-- RECORDING CONTROLS -->
         <div class="controls">
-            <!-- LANGUAGE SELECTOR (future use) -->
-            <div class="language-selector">
-                <label for="language">Language:</label>
-                <select id="language">
-                    <option value="en">English</option>
-                    <option value="hi">Hindi</option>
-                    <option value="mix">English + Hindi</option>
-                </select>
-            </div>
-
-            <!-- RECORD BUTTON -->
             <button id="recordBtn" class="btn btn-primary">
-                🎙️ Start Recording
+                🎙️ START RECORDING
             </button>
-
-            <!-- STOP BUTTON (hidden until recording starts) -->
             <button id="stopBtn" class="btn btn-danger hidden">
-                ⏹️ Stop Recording
+                ⏹️ STOP RECORDING
             </button>
-
-            <!-- CLEAR CHAT -->
             <button id="clearBtn" class="btn btn-secondary">
-                🔄 Clear Chat
+                🔄 CLEAR CHAT
             </button>
         </div>
 
         <!-- STATUS FOOTER -->
         <footer>
             <p id="connectionStatus" class="status-indicator">● Connected to server</p>
-            <p class="help-text">Click "Start Recording", speak, then click "Stop Recording"</p>
         </footer>
     </div>
 
-    <!-- AUDIO ELEMENT (for playing Joey's voice) -->
+    <!-- AUDIO ELEMENT (for playing character's voice) -->
     <audio id="audioPlayer" style="display: none;"></audio>
 
     <!-- LOAD CLIENT-SIDE SCRIPT -->

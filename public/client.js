@@ -1,111 +1,352 @@
 // ============================================
-// JOEY VOICE CHATBOT - FRONTEND (Browser)
+// MULTI-CHARACTER VOICE CHATBOT - FRONTEND
 // ============================================
 
-// 1. GLOBAL VARIABLES
-let mediaRecorder; // The object that records audio
-let audioChunks = []; // Array to store audio pieces
-let isRecording = false; // Track if we're currently recording
+// GLOBAL VARIABLES
+let mediaRecorder;
+let audioChunks = [];
+let isRecording = false;
+let currentCharacter = 'joey';
 
-// 2. DOM ELEMENTS - Get references to HTML elements
-const recordBtn = document.getElementById('recordBtn');
-const stopBtn = document.getElementById('stopBtn');
-const clearBtn = document.getElementById('clearBtn');
-const audioPlayer = document.getElementById('audioPlayer');
-const userMessageBox = document.getElementById('userMessageBox');
-const joeyMessageBox = document.getElementById('joeyMessageBox');
-const statusBox = document.getElementById('statusBox');
-const userMessage = document.getElementById('userMessage');
-const joeyMessage = document.getElementById('joeyMessage');
-const statusText = document.getElementById('statusText');
-const connectionStatus = document.getElementById('connectionStatus');
-const chatHistory = document.getElementById('chatHistory');
+let chatHistories = {
+  joey: [],
+  dwight: [],
+  dhruv: []
+};
 
-// 2B. CHAT HISTORY ARRAY
-let conversationHistory = [];
+let audioPlayer = null;
+let currentlyPlayingIndex = null;
+let currentlyPlayingCharacter = null;
 
-// 3. HELPER FUNCTION - Show status updates
+let recordBtn, stopBtn, clearBtn, statusBox, statusText, connectionStatus, chatHistory;
+
+// Format timestamp
+function formatTimestamp() {
+  const now = new Date();
+  const hours = now.getHours().toString().padStart(2, '0');
+  const minutes = now.getMinutes().toString().padStart(2, '0');
+  const day = now.getDate();
+  const month = now.toLocaleString('default', { month: 'short' });
+  return `${hours}:${minutes} • ${day} ${month}`;
+}
+
+// Show/hide status
 function showStatus(message) {
-  statusBox.classList.remove('hidden');
-  statusText.textContent = message;
+  if (statusBox) {
+    statusBox.classList.remove('hidden');
+    statusText.textContent = message;
+  }
 }
 
 function hideStatus() {
-  statusBox.classList.add('hidden');
+  if (statusBox) {
+    statusBox.classList.add('hidden');
+  }
 }
 
-// 3B. ADD MESSAGE TO HISTORY
-function addToHistory(sender, message) {
-  conversationHistory.push({ sender, message });
+// Select a character
+function selectCharacter(characterName) {
+  console.log(`👤 Selected character: ${characterName}`);
+  currentCharacter = characterName;
   
-  // Create history message element
-  const historyMsg = document.createElement('div');
-  historyMsg.className = `history-message ${sender === 'user' ? 'user' : 'joey'}`;
-  historyMsg.innerHTML = `
-    <div class="label">${sender === 'user' ? 'YOU SAID:' : 'JOEY SAYS:'}</div>
-    <div>${message}</div>
-  `;
+  const buttons = document.querySelectorAll('.character-btn');
+  buttons.forEach(btn => {
+    if (btn.dataset.character === characterName) {
+      btn.classList.add('active');
+    } else {
+      btn.classList.remove('active');
+    }
+  });
   
-  // Add to history (remove placeholder if this is first message)
-  if (conversationHistory.length === 1) {
-    chatHistory.innerHTML = '';
+  loadCharacterHistory(characterName);
+  updateCharacterDisplay(characterName);
+  hideStatus();
+}
+
+// Load character's chat history
+function loadCharacterHistory(character) {
+  const history = chatHistories[character];
+  chatHistory.innerHTML = '';
+  
+  if (history.length === 0) {
+    chatHistory.innerHTML = '<p class="history-placeholder">Start speaking to see the conversation here...</p>';
+    return;
   }
   
-  chatHistory.appendChild(historyMsg);
+  console.log(`📜 Loading ${history.length} messages for ${character}`);
   
-  // Scroll to bottom
+  history.forEach((item, index) => {
+    const historyMsg = document.createElement('div');
+    historyMsg.className = `history-message ${item.sender === 'user' ? 'user' : 'character'}`;
+    
+    // Create label for user messages
+    if (item.sender === 'user') {
+      const label = document.createElement('div');
+      label.className = 'label';
+      label.textContent = 'You';
+      historyMsg.appendChild(label);
+    }
+    
+    // Create message bubble
+    const bubble = document.createElement('div');
+    bubble.className = 'message-bubble';
+    
+    // Create message text
+    const textDiv = document.createElement('div');
+    textDiv.className = 'message-text';
+    textDiv.textContent = item.message;
+    bubble.appendChild(textDiv);
+    
+    // Create play button for character messages with audio
+    if (item.sender === 'character' && item.audio) {
+      const playBtn = document.createElement('button');
+      playBtn.className = 'play-button-inline';
+      playBtn.id = `play-btn-${character}-${index}`;
+      playBtn.textContent = '▶️';
+      playBtn.onclick = () => playMessageAudio(character, index);
+      bubble.appendChild(playBtn);
+      console.log(`✅ Loaded play button for ${character} message ${index}`);
+    }
+    
+    historyMsg.appendChild(bubble);
+    
+    // Create timestamp
+    if (item.timestamp) {
+      const timestampDiv = document.createElement('div');
+      timestampDiv.className = 'message-timestamp';
+      timestampDiv.textContent = item.timestamp;
+      historyMsg.appendChild(timestampDiv);
+    }
+    
+    chatHistory.appendChild(historyMsg);
+  });
+  
+  updatePlayButtonStates();
   chatHistory.scrollTop = chatHistory.scrollHeight;
 }
 
-// 4. HELPER FUNCTION - Clear all messages
-function clearChat() {
-  userMessageBox.classList.add('hidden');
-  joeyMessageBox.classList.add('hidden');
-  hideStatus();
-  audioPlayer.pause();
-  audioPlayer.src = '';
-  conversationHistory = [];
-  chatHistory.innerHTML = '<p class="history-placeholder">Chat history will appear here...</p>';
+// Update play button states
+function updatePlayButtonStates() {
+  const buttons = document.querySelectorAll('.play-button-inline');
+  
+  buttons.forEach(btn => {
+    const btnId = btn.id;
+    
+    if (currentlyPlayingIndex !== null && currentlyPlayingCharacter !== null) {
+      const currentId = `play-btn-${currentlyPlayingCharacter}-${currentlyPlayingIndex}`;
+      
+      if (btnId === currentId) {
+        btn.textContent = '⏸️';
+      } else {
+        btn.textContent = '▶️';
+      }
+    } else {
+      btn.textContent = '▶️';
+    }
+  });
 }
 
-// 5. REQUEST MICROPHONE PERMISSION
+// Play audio from message
+function playMessageAudio(character, messageIndex) {
+  console.log(`🎵 Playing ${character} message ${messageIndex}`);
+  
+  if (!audioPlayer) {
+    alert('Audio player not available. Refresh the page.');
+    return;
+  }
+  
+  const history = chatHistories[character];
+  if (!history || messageIndex >= history.length) {
+    console.error('Invalid message index');
+    return;
+  }
+  
+  const message = history[messageIndex];
+  if (!message.audio) {
+    alert('No audio available for this message.');
+    return;
+  }
+  
+  // Toggle pause if already playing this message
+  if (currentlyPlayingIndex === messageIndex && currentlyPlayingCharacter === character && !audioPlayer.paused) {
+    audioPlayer.pause();
+    audioPlayer.currentTime = 0;
+    currentlyPlayingIndex = null;
+    currentlyPlayingCharacter = null;
+    updatePlayButtonStates();
+    console.log('⏸️ Paused audio');
+    return;
+  }
+  
+  try {
+    const audioData = new Uint8Array(
+      atob(message.audio).split('').map(c => c.charCodeAt(0))
+    );
+    const audioBlob = new Blob([audioData], { type: 'audio/mp3' });
+    const audioUrl = URL.createObjectURL(audioBlob);
+    
+    currentlyPlayingIndex = messageIndex;
+    currentlyPlayingCharacter = character;
+    
+    audioPlayer.src = audioUrl;
+    audioPlayer.play()
+      .then(() => {
+        console.log('✅ Playing audio');
+        updatePlayButtonStates();
+      })
+      .catch(err => {
+        console.error('❌ Playback blocked:', err);
+        alert('Click the ▶️ button again to play (browser blocked first attempt)');
+        currentlyPlayingIndex = null;
+        currentlyPlayingCharacter = null;
+        updatePlayButtonStates();
+      });
+    
+    audioPlayer.onended = () => {
+      console.log('✅ Audio finished');
+      currentlyPlayingIndex = null;
+      currentlyPlayingCharacter = null;
+      updatePlayButtonStates();
+    };
+    
+  } catch (error) {
+    console.error('❌ Error:', error);
+    alert('Error playing audio');
+  }
+}
+
+// Update character display
+function updateCharacterDisplay(character) {
+  const info = {
+    joey: { name: 'Joey Tribbiani', source: 'From F.R.I.E.N.D.S' },
+    dwight: { name: 'Dwight K. Schrute', source: 'From The Office' },
+    dhruv: { name: 'Dhruv Rathee', source: 'YouTuber / Social Commentator' }
+  };
+  
+  document.getElementById('characterName').textContent = info[character].name;
+  document.getElementById('characterSource').textContent = info[character].source;
+}
+
+// Add message to history
+function addToHistory(sender, message, audio = null) {
+  console.log(`📥 addToHistory called - Sender: ${sender}, Audio: ${audio ? 'YES' : 'NO'}`);
+  
+  const timestamp = formatTimestamp();
+  
+  const historyItem = { 
+    sender, 
+    message,
+    audio,
+    timestamp
+  };
+  
+  chatHistories[currentCharacter].push(historyItem);
+  const messageIndex = chatHistories[currentCharacter].length - 1;
+  
+  console.log(`💾 Added to history: ${currentCharacter} index ${messageIndex}`);
+  if (audio) {
+    console.log(`🎵 Audio stored for message ${messageIndex}`);
+  }
+  
+  // Remove placeholder
+  const placeholder = chatHistory.querySelector('.history-placeholder');
+  if (placeholder) placeholder.remove();
+  
+  // Create message element
+  const historyMsg = document.createElement('div');
+  historyMsg.className = `history-message ${sender === 'user' ? 'user' : 'character'}`;
+  
+  // Create label for user messages
+  if (sender === 'user') {
+    const label = document.createElement('div');
+    label.className = 'label';
+    label.textContent = 'You';
+    historyMsg.appendChild(label);
+  }
+  
+  // Create message bubble
+  const bubble = document.createElement('div');
+  bubble.className = 'message-bubble';
+  
+  // Create message text
+  const textDiv = document.createElement('div');
+  textDiv.className = 'message-text';
+  textDiv.textContent = message;
+  bubble.appendChild(textDiv);
+  
+  // Create play button for character messages with audio
+  if (sender === 'character' && audio) {
+    console.log(`🎯 CREATING BUTTON NOW...`);
+    const playBtn = document.createElement('button');
+    playBtn.className = 'play-button-inline';
+    playBtn.id = `play-btn-${currentCharacter}-${messageIndex}`;
+    playBtn.textContent = '▶️';
+    playBtn.onclick = () => playMessageAudio(currentCharacter, messageIndex);
+    bubble.appendChild(playBtn);
+    console.log(`✅ Play button CREATED for ${currentCharacter} message ${messageIndex}`);
+  }
+  
+  historyMsg.appendChild(bubble);
+  
+  // Create timestamp
+  const timestampDiv = document.createElement('div');
+  timestampDiv.className = 'message-timestamp';
+  timestampDiv.textContent = timestamp;
+  historyMsg.appendChild(timestampDiv);
+  
+  // Add to chat history
+  chatHistory.appendChild(historyMsg);
+  
+  updatePlayButtonStates();
+  chatHistory.scrollTop = chatHistory.scrollHeight;
+  
+  console.log(`✅ Message rendered in DOM`);
+}
+
+// Clear chat
+function clearChat() {
+  if (confirm('Clear chat history for this character?')) {
+    chatHistories[currentCharacter] = [];
+    chatHistory.innerHTML = '<p class="history-placeholder">Start speaking to see the conversation here...</p>';
+    hideStatus();
+    
+    if (currentlyPlayingCharacter === currentCharacter && audioPlayer) {
+      audioPlayer.pause();
+      audioPlayer.currentTime = 0;
+      currentlyPlayingIndex = null;
+      currentlyPlayingCharacter = null;
+    }
+    
+    console.log(`🗑️ Cleared chat for ${currentCharacter}`);
+  }
+}
+
+// Request microphone
 async function requestMicrophone() {
   try {
     const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-    
-    // Initialize MediaRecorder with the audio stream
     mediaRecorder = new MediaRecorder(stream);
-    
-    // When audio data is available, store it
-    mediaRecorder.ondataavailable = (event) => {
-      audioChunks.push(event.data);
-    };
-    
-    // When recording stops, process the audio
+    mediaRecorder.ondataavailable = (e) => audioChunks.push(e.data);
     mediaRecorder.onstop = handleRecordingStop;
-    
     console.log('✅ Microphone access granted');
     return true;
   } catch (error) {
-    console.error('❌ Microphone access denied:', error);
-    alert('Please allow microphone access to use this app');
+    console.error('❌ Microphone denied:', error);
+    alert('Please allow microphone access');
     return false;
   }
 }
 
-// 6. START RECORDING
+// Start recording
 async function startRecording() {
-  // First time? Request microphone permission
   if (!mediaRecorder) {
     const allowed = await requestMicrophone();
     if (!allowed) return;
   }
   
-  audioChunks = []; // Reset audio chunks
+  audioChunks = [];
   mediaRecorder.start();
-  isRecording = true;
   
-  // Update UI
   recordBtn.classList.add('hidden');
   stopBtn.classList.remove('hidden');
   showStatus('🎙️ Recording... speak now');
@@ -113,147 +354,112 @@ async function startRecording() {
   console.log('🔴 Recording started');
 }
 
-// 7. STOP RECORDING & PROCESS AUDIO
-async function handleRecordingStop() {
-  // Create a blob (binary data) from all audio chunks
-  const audioBlob = new Blob(audioChunks, { type: 'audio/wav' });
-  
-  // Compress using webp format (smaller file size)
-  const canvas = document.createElement('canvas');
-  const offscreen = canvas.getContext('2d');
-  
-  // Convert blob to base64 string for sending to server
-  const reader = new FileReader();
-  reader.onloadend = async () => {
-    let base64Audio = reader.result.split(',')[1]; // Remove "data:audio/wav;base64," prefix
-    
-    // Limit audio to first 30 seconds to keep payload small
-    console.log(`📊 Audio size: ${(base64Audio.length / 1024).toFixed(2)} KB`);
-    
-    if (base64Audio.length > 1000000) { // If larger than 1MB
-      console.warn('⚠️ Audio file too large, trimming...');
-      base64Audio = base64Audio.substring(0, 1000000);
-    }
-    
-    await sendToServer(base64Audio);
-  };
-  reader.readAsDataURL(audioBlob);
-}
-
+// Stop recording
 function stopRecording() {
   mediaRecorder.stop();
-  isRecording = false;
-  
-  // Update UI
   stopBtn.classList.add('hidden');
   recordBtn.classList.remove('hidden');
-  showStatus('⏳ Processing audio...');
+  showStatus('⏳ Processing...');
   
   console.log('⏹️ Recording stopped');
 }
 
-// 8. MAIN FUNCTION - Send audio to server & get response
-async function sendToServer(base64Audio) {
+// Handle recording stop
+async function handleRecordingStop() {
+  const audioBlob = new Blob(audioChunks, { type: 'audio/wav' });
+  const formData = new FormData();
+  formData.append('audio', audioBlob, 'recording.wav');
+  await sendToServer(formData);
+}
+
+// Send to server
+async function sendToServer(formData) {
   try {
-    // Step 1: TRANSCRIBE - Send audio to /transcribe endpoint
-    console.log('📤 Sending audio to server...');
+    // Step 1: Transcribe
     showStatus('📝 Transcribing...');
-    
-    const transcribeResponse = await fetch('http://localhost:3000/transcribe', {
+    const transcribeRes = await fetch('/api/transcribe', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ audio: base64Audio })
+      body: formData
     });
     
-    if (!transcribeResponse.ok) {
-      throw new Error('Transcription failed');
-    }
+    if (!transcribeRes.ok) throw new Error('Transcription failed');
     
-    const transcribeData = await transcribeResponse.json();
-    const transcript = transcribeData.transcript;
+    const { transcription } = await transcribeRes.json();
+    console.log('✅ Transcript:', transcription);
     
-    console.log(`✅ Transcript: "${transcript}"`);
+    addToHistory('user', transcription);
     
-    // Add to history (don't show in current box to avoid duplication)
-    addToHistory('user', transcript);
-    
-    // Step 2: GET RESPONSE - Send transcript to /respond endpoint
-    console.log('🤖 Getting Joey response...');
-    showStatus('🤔 Joey is thinking...');
-    
-    const respondResponse = await fetch('http://localhost:3000/respond', {
+    // Step 2: Get response
+    showStatus(`🤔 ${currentCharacter} is thinking...`);
+    const respondRes = await fetch('/api/respond', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ transcript: transcript })
+      body: JSON.stringify({ 
+        userMessage: transcription, 
+        character: currentCharacter 
+      })
     });
     
-    if (!respondResponse.ok) {
-      throw new Error('Response generation failed');
-    }
+    if (!respondRes.ok) throw new Error('Response generation failed');
     
-    const respondData = await respondResponse.json();
-    const joeyResponse = respondData.response;
+    const { response } = await respondRes.json();
+    console.log('✅ Response:', response);
     
-    console.log(`✅ Joey says: "${joeyResponse}"`);
-    
-    // Add to history
-    addToHistory('joey', joeyResponse);
-    
-    // Also show in current box for immediate feedback
-    joeyMessage.textContent = joeyResponse;
-    joeyMessageBox.classList.remove('hidden');
-    
-    // Step 3: TEXT TO SPEECH - Convert response to audio
-    console.log('🎤 Converting to speech...');
+    // Step 3: Get audio
     showStatus('🎙️ Generating voice...');
-    
-    const ttsResponse = await fetch('http://localhost:3000/tts', {
+    const ttsRes = await fetch('/api/tts', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ text: joeyResponse })
+      body: JSON.stringify({ 
+        text: response, 
+        character: currentCharacter 
+      })
     });
     
-    if (!ttsResponse.ok) {
-      throw new Error('TTS failed');
-    }
+    if (!ttsRes.ok) throw new Error('TTS failed');
     
-    const ttsData = await ttsResponse.json();
-    const audioBase64 = ttsData.audio;
-    
+    const { audio } = await ttsRes.json();
     console.log('✅ Audio generated');
     
-    // Step 4: PLAY AUDIO
-    const audioData = new Uint8Array(
-      atob(audioBase64)
-        .split('')
-        .map(c => c.charCodeAt(0))
-    );
-    const audioBlob = new Blob([audioData], { type: 'audio/mp3' });
-    const audioUrl = URL.createObjectURL(audioBlob);
+    // Add to history with audio - ✅ FIXED: Pass 'character' not currentCharacter
+    addToHistory('character', response, audio);
     
-    audioPlayer.src = audioUrl;
-    hideStatus();
-    
-    // Remove any old play buttons
-    const oldButtons = joeyMessageBox.querySelectorAll('button');
-    oldButtons.forEach(btn => btn.remove());
-    
-    // Show a play button for the user to click
-    const playBtn = document.createElement('button');
-    playBtn.textContent = '▶️ Play Joey\'s Voice';
-    playBtn.className = 'btn btn-primary';
-    playBtn.style.marginTop = '10px';
-    playBtn.style.width = '100%';
-    playBtn.onclick = () => {
-      audioPlayer.play();
-      playBtn.textContent = '⏸️ Playing...';
+    // Try autoplay
+    try {
+      const audioData = new Uint8Array(
+        atob(audio).split('').map(c => c.charCodeAt(0))
+      );
+      const audioBlob = new Blob([audioData], { type: 'audio/mp3' });
+      const audioUrl = URL.createObjectURL(audioBlob);
+      
+      const messageIndex = chatHistories[currentCharacter].length - 1;
+      currentlyPlayingIndex = messageIndex;
+      currentlyPlayingCharacter = currentCharacter;
+      
+      audioPlayer.src = audioUrl;
+      audioPlayer.play()
+        .then(() => {
+          console.log('✅ Audio autoplaying');
+          hideStatus();
+          updatePlayButtonStates();
+        })
+        .catch(err => {
+          console.warn('⚠️ Autoplay blocked:', err);
+          hideStatus();
+          currentlyPlayingIndex = null;
+          currentlyPlayingCharacter = null;
+        });
+      
       audioPlayer.onended = () => {
-        playBtn.textContent = '▶️ Play Joey\'s Voice';
+        console.log('✅ Audio finished');
+        currentlyPlayingIndex = null;
+        currentlyPlayingCharacter = null;
+        updatePlayButtonStates();
       };
-    };
-    joeyMessageBox.appendChild(playBtn);
-    
-    console.log('▶️ Audio ready to play');
+    } catch (autoplayError) {
+      console.error('❌ Autoplay error:', autoplayError);
+      hideStatus();
+    }
     
   } catch (error) {
     console.error('❌ Error:', error.message);
@@ -263,23 +469,51 @@ async function sendToServer(base64Audio) {
   }
 }
 
-// 9. EVENT LISTENERS - Connect buttons to functions
-recordBtn.addEventListener('click', startRecording);
-stopBtn.addEventListener('click', stopRecording);
-clearBtn.addEventListener('click', clearChat);
+// Setup event listeners
+function setupEventListeners() {
+  recordBtn = document.getElementById('recordBtn');
+  stopBtn = document.getElementById('stopBtn');
+  clearBtn = document.getElementById('clearBtn');
+  statusBox = document.getElementById('statusBox');
+  statusText = document.getElementById('statusText');
+  connectionStatus = document.getElementById('connectionStatus');
+  chatHistory = document.getElementById('chatHistory');
+  
+  recordBtn.addEventListener('click', startRecording);
+  stopBtn.addEventListener('click', stopRecording);
+  clearBtn.addEventListener('click', clearChat);
+  
+  console.log('✅ Event listeners set up');
+}
 
-// 10. CHECK SERVER CONNECTION ON PAGE LOAD
+// Initialize on page load
 window.addEventListener('load', async () => {
   try {
-    const response = await fetch('http://localhost:3000/health');
+    audioPlayer = document.getElementById('audioPlayer');
+    if (!audioPlayer) {
+      console.error('❌ Audio player element not found!');
+      alert('Error: Audio player missing. Check HTML.');
+      return;
+    }
+    console.log('✅ Audio player initialized');
+    
+    setupEventListeners();
+    
+    const response = await fetch('/health');
     const data = await response.json();
     console.log('✅ Connected to server:', data.status);
     connectionStatus.textContent = '● Connected to server';
     connectionStatus.style.color = '#27ae60';
+    
+    updateCharacterDisplay('joey');
+    console.log('✅ Initialized with Joey');
+    
   } catch (error) {
-    console.error('❌ Cannot connect to server');
-    connectionStatus.textContent = '● Cannot connect to server';
-    connectionStatus.style.color = '#e74c3c';
-    alert('❌ Cannot connect to server. Make sure "npm start" is running!');
+    console.error('❌ Cannot connect to server:', error);
+    if (connectionStatus) {
+      connectionStatus.textContent = '● Cannot connect to server';
+      connectionStatus.style.color = '#e74c3c';
+    }
+    alert('❌ Server not running. Start with: npm start');
   }
 });

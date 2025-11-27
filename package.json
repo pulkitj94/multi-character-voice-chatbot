@@ -1,12 +1,13 @@
 {
-  "name": "joey-voice-chatbot",
+  "name": "multi-character-voice-chatbot",
   "version": "1.0.0",
-  "description": "A voice chatbot that talks like Joey from FRIENDS",
+  "description": "A voice chatbot with Joey, Dwight, and Dhruv Rathee",
   "main": "server.js",
   "scripts": {
-    "start": "node server.js"
+    "start": "node server.js",
+    "dev": "node server.js"
   },
-  "keywords": ["voice", "chatbot", "joey", "friends"],
+  "keywords": ["voice", "chatbot", "joey", "dwight", "dhruv", "friends", "office"],
   "author": "",
   "license": "ISC",
   "dependencies": {
@@ -15,6 +16,8 @@
     "dotenv": "^16.0.0",
     "express": "^4.18.0",
     "form-data": "^4.0.0",
+    "multer": "^1.4.5-lts.1",
+    "openai": "^4.20.0",
     "socket.io": "^4.5.0"
   }
 }
